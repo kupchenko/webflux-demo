@@ -6,6 +6,7 @@ import org.springframework.data.annotation.Transient;
 import org.springframework.data.relational.core.mapping.Table;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 @Data
 @Table(name = "orders")
@@ -20,4 +21,5 @@ public class Order {
   private Client client;
   private int pilotes;
   private BigDecimal orderTotal;
+  private LocalDateTime createdAt;
 }

@@ -28,5 +28,6 @@ CREATE TABLE IF NOT EXISTS orders
     order_total double,
     client_fk   INTEGER REFERENCES clients (id),
     address_fk  INTEGER REFERENCES addresses (id),
+    created_at  timestamp,
     PRIMARY KEY (id)
 );

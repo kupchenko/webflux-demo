@@ -2,6 +2,7 @@ package me.kupchenko.webfluxdemo.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import me.kupchenko.webfluxdemo.controller.UpdateOrderRequest;
 import me.kupchenko.webfluxdemo.dto.AddressDto;
 import me.kupchenko.webfluxdemo.dto.OrderDto;
 import me.kupchenko.webfluxdemo.dto.request.CreateOrderRequest;
@@ -19,6 +20,8 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -36,6 +39,8 @@ public class OrderService {
   private BigDecimal price;
   @Value("${default.pilotes.amounts}")
   private List<Integer> pilotesAmounts;
+  @Value("${default.pilotes.orderModificationDuration}")
+  private Integer orderModificationDuration;
 
   public Mono<Order> createOrder(CreateOrderRequest request) {
     if (!isValidRequest(request)) {
@@ -74,6 +79,7 @@ public class OrderService {
     order.setOrderTotal(price.multiply(BigDecimal.valueOf(request.getNumberOfPilots())));
     order.setClientFk(client.getId());
     order.setAddressFk(address.getId());
+    order.setCreatedAt(LocalDateTime.now());
     return order;
   }
 
@@ -127,5 +133,41 @@ public class OrderService {
     orderDto.setPilotes(order.getPilotes());
     orderDto.setOrderTotal(order.getOrderTotal());
     return orderDto;
+  }
+
+  public Mono<Order> updateOrder(Long orderId, UpdateOrderRequest request) {
+    LocalDateTime now = LocalDateTime.now();
+    return orderRepository.findById(orderId)
+        .flatMap(order -> checkIfOrderExpiredForUpdate(now, order))
+        .map(order -> updateNumberOfPilotes(request, order))
+        .flatMap(order -> updateAddress(order, request))
+        .flatMap(orderRepository::save);
+  }
+
+  private Mono<Order> checkIfOrderExpiredForUpdate(LocalDateTime now, Order order) {
+    long minutes = ChronoUnit.MINUTES.between(now, order.getCreatedAt());
+    if (minutes > orderModificationDuration) {
+      return Mono.error(IllegalStateException::new);
+    }
+    return Mono.just(order);
+  }
+
+  private Mono<Order> updateAddress(Order order, UpdateOrderRequest request) {
+    if (Objects.isNull(request.getAddress())) {
+      return Mono.just(order);
+    }
+    return addressRepository.save(toAddress(request.getAddress()))
+        .map(address -> {
+          order.setAddressFk(address.getId());
+          return order;
+        });
+  }
+
+  private Order updateNumberOfPilotes(UpdateOrderRequest request, Order order) {
+    if (Objects.nonNull(request.getNumberOfPilotes())) {
+      order.setPilotes(request.getNumberOfPilotes());
+      order.setOrderTotal(price.multiply(BigDecimal.valueOf(request.getNumberOfPilotes())));
+    }
+    return order;
   }
 }
